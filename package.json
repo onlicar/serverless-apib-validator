@@ -1,0 +1,23 @@
+{
+  "name": "serverless-apib-validator",
+  "version": "1.0.0",
+  "description": "Validate that an API Blueprint has full coverage over a Serverless config",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/onlicar/serverless-apib-validator.git"
+  },
+  "author": "Dan Bovey <dan@onlicar.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/onlicar/serverless-apib-validator/issues"
+  },
+  "homepage": "https://github.com/onlicar/serverless-apib-validator#readme",
+  "dependencies": {
+    "chalk": "^2.3.0",
+    "protagonist": "^2.0.0-pre.0"
+  }
+}
