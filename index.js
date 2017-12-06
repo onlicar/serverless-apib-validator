@@ -50,7 +50,9 @@ class ServerlessApibValidator {
 
           functions[name].events
             .filter(e => !!e.http)
-            .forEach(event => lambdaEndpoints.push({ ...event.http, name }));
+            .forEach(event =>
+              lambdaEndpoints.push(Object.assign({}, event.http, name))
+            );
         });
 
       // Parse the API blueprint
