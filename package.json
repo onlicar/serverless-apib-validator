@@ -1,6 +1,6 @@
 {
   "name": "serverless-apib-validator",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "📘 Validate that an API Blueprint has full coverage over a Serverless config",
   "main": "index.js",
   "scripts": {
