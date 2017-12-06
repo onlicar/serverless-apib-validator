@@ -7,10 +7,6 @@ class ServerlessApibValidator {
   constructor(serverless, options) {
     this.serverless = serverless;
 
-    this.commands = {
-      generate: this.generate.bind(this),
-      validate: this.runValidate.bind(this)
-    };
     this.hooks = {
       'before:package:initialize': this.validate.bind(this)
     };
@@ -23,31 +19,9 @@ class ServerlessApibValidator {
     }, this.serverless.service.custom && this.serverless.service.custom.apibValidator || {});
   }
 
-  generate() {
-    
-  }
-
-  runValidate() {
-    this.readBlueprint()
-      .then(() => {
-        console.log(chalk.green('✔︎') + ' API Blueprint is valid.');
-        console.log(chalk.yellow('We can only check if it is documented when packaging/deploying.'));
-      });
-  }
-
-  readBlueprint() {
-    const options = this.getOptions();
-
-    let apib;
-    try {
-      apib = fs.readFileSync(options.blueprintFile, 'utf-8');
-    } catch(e) {
-      reject(`API Blueprint file was not found at ${options.blueprintFile}.`);
-    }
-
-    return apib;
-  }
-
+  /**
+   * Validate the API blueprint file against a serverless.yml
+   */
   validate() {
     const options = this.getOptions();
 
@@ -56,6 +30,7 @@ class ServerlessApibValidator {
     }
 
     return new Promise((resolve, reject) => {
+      // Load the API blueprint file
       let apib;
       try {
         apib = fs.readFileSync(options.blueprintFile, 'utf-8');
@@ -64,6 +39,7 @@ class ServerlessApibValidator {
         return;
       }
 
+      // Get a list of every function defined in serverless.yml
       const lambdaEndpoints = [];
       const functions = this.serverless.service.functions;
       Object.keys(this.serverless.service.functions)
@@ -76,8 +52,8 @@ class ServerlessApibValidator {
             .filter(e => !!e.http)
             .forEach(event => lambdaEndpoints.push({ ...event.http, name }));
         });
-      console.log(lambdaEndpoints);
 
+      // Parse the API blueprint
       protagonist.parse(apib, (err, blueprint) => {
         if(err) {
           reject(err);
@@ -86,28 +62,27 @@ class ServerlessApibValidator {
 
         const endpointsDocumented = [];
 
-        const traverseContent = (content, element, callback) => {
-          if(!content || !Array.isArray(content)) {
-            return;
-          }
-
-          content.forEach(item => {
-            if(item.element === element) {
-              callback(item);
-            } else {
-              traverseContent(item.content, element, callback);
-            }
-          });
-        };
-
-        traverseContent(blueprint.content, 'resource', resource => {
+        // Find every resource
+        this.traverseContent(blueprint.content, 'resource', resource => {
           if(resource.attributes.href.element == 'string') {
             const resourcePath = resource.attributes.href.content;
 
-            traverseContent(resource.content, 'httpRequest', request => {
-              endpointsDocumented.push({
-                path: resourcePath,
-                method: request.attributes.method
+            // Find every action
+            this.traverseContent(resource.content, 'transition', transition => {
+              const transitionPath = transition.attributes && transition.attributes.href
+                ? transition.attributes.href.content
+                : null;
+
+              const methodsFound = [];
+              this.traverseContent(transition.content, 'httpRequest', request => {
+                const method = request.attributes.method;
+                if(methodsFound.indexOf(request) == -1) {
+                  methodsFound.push(method);
+                  endpointsDocumented.push({
+                    path: transitionPath || resourcePath,
+                    method: method
+                  });
+                }
               });
             });
           }
@@ -116,13 +91,14 @@ class ServerlessApibValidator {
         const notDocumented = [];
 
         lambdaEndpoints.forEach(endpoint => {
-          const matchPath = options.basePath + endpoint.path;
+          const matchPath = this.cleanPath(options.basePath + endpoint.path);
+          const matchMethod = endpoint.method.toLowerCase();
 
           const isDocumented = endpointsDocumented.find(doc => {
-            // Remove optional paramters
-            const documentedPath = doc.path.replace(/{\?\w+}/g, '');
-            console.log(matchPath, documentedPath);
-            return documentedPath === matchPath;
+            const docPath = this.cleanPath(doc.path);
+            const docMethod = doc.method.content.toLowerCase();
+
+            return docPath === matchPath && docMethod === matchMethod;
           });
           if(!isDocumented) {
             notDocumented.push(endpoint.name);
@@ -130,12 +106,45 @@ class ServerlessApibValidator {
         });
 
         if(notDocumented.length > 0) {
+          // Stop the serverless deployment
           reject(`API Blueprint does not contain documentation for the following functions:\n\n\t${notDocumented.join(', ')}`);
         }
 
-        reject('API Blueprint is validated. I\'m just here to cancel deployment.');
+        // The API Blueprint is valid
+        resolve();
       });
     });
+  }
+
+  /**
+   * Loop through a section of AST content and run
+   * a callback every time an element is found.
+   * 
+   * @param {Object} content
+   * @param {string} element
+   * @param {function} callback
+   */
+  traverseContent(content, element, callback) {
+    if(!content || !Array.isArray(content)) {
+      return;
+    }
+
+    content.forEach(item => {
+      if(item.element === element) {
+        callback(item);
+      } else {
+        this.traverseContent(item.content, element, callback);
+      }
+    });
+  }
+
+  /**
+   * Remove optional paramters and trailing slash
+   * 
+   * @param {string} path
+   */
+  cleanPath(path) {
+    return path.replace(/{\?\w+}/g, '').replace(/\/$/, '');
   }
 }
 
