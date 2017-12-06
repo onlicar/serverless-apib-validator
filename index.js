@@ -144,7 +144,7 @@ class ServerlessApibValidator {
    * @param {string} path
    */
   cleanPath(path) {
-    return path.replace(/{\?\w+}/g, '').replace(/\/$/, '');
+    return path.replace(/{\?[^=]+}/g, '').replace(/\/$/, '');
   }
 }
 
