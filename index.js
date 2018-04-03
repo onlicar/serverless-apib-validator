@@ -7,8 +7,16 @@ class ServerlessApibValidator {
   constructor(serverless, options) {
     this.serverless = serverless;
 
+    this.commands = {
+      validate: {
+        usage: 'Validate that an API Blueprint has full coverage over a Serverless config',
+        lifecycleEvents: ['start']
+      }
+    };
+
     this.hooks = {
-      'before:package:initialize': this.validate.bind(this)
+      'before:package:initialize': this.validate.bind(this),
+      'validate:start': this.validate.bind(this, true)
     };
   }
 
@@ -22,10 +30,18 @@ class ServerlessApibValidator {
   /**
    * Validate the API blueprint file against a serverless.yml
    */
-  validate() {
+  validate(isCommand = false) {
     const options = this.getOptions();
+    
+    if(isCommand) {
+      console.log('Validating API blueprint...');
+    }
 
     if(typeof this.serverless.service.functions == 'undefined') {
+      if(isCommand) {
+        console.log('⚠️  No functions defined.');
+      }
+
       return Promise.resolve();
     }
 
@@ -35,7 +51,7 @@ class ServerlessApibValidator {
       try {
         apib = fs.readFileSync(options.blueprintFile, 'utf-8');
       } catch(e) {
-        reject(`API Blueprint file was not found at ${options.blueprintFile}.`);
+        reject(`🚫  API Blueprint file was not found at ${options.blueprintFile}.`);
         return;
       }
 
@@ -51,7 +67,7 @@ class ServerlessApibValidator {
           functions[name].events
             .filter(e => !!e.http)
             .forEach(event =>
-              lambdaEndpoints.push(Object.assign({}, event.http, name))
+              lambdaEndpoints.push(Object.assign({}, event.http, { name }))
             );
         });
 
@@ -59,6 +75,15 @@ class ServerlessApibValidator {
       protagonist.parse(apib, (err, blueprint) => {
         if(err) {
           reject(err);
+          return;
+        }
+
+        let annotation = null;
+        this.traverseContent(blueprint.content, 'annotation', a => {
+          annotation = a;
+        });
+        if(annotation) {
+          reject('🚫  API Blueprint is not valid.\n\t' + annotation.content);
           return;
         }
 
@@ -109,11 +134,15 @@ class ServerlessApibValidator {
 
         if(notDocumented.length > 0) {
           // Stop the serverless deployment
-          reject(`API Blueprint does not contain documentation for the following functions:\n\n\t${notDocumented.join(', ')}`);
+          reject(`🚫  API Blueprint does not contain documentation for the following functions:\n\n\t${notDocumented.join(', ')}`);
+          return;
         }
 
         // The API Blueprint is valid
         resolve();
+        if(isCommand) {
+          console.log('✅  API Blueprint is valid');
+        }
       });
     });
   }

@@ -26,3 +26,7 @@ custom:
     blueprintFile: '../my-docs.apib' # Defaults to apiary.apib
     basePath: '/your-service' # If you have many microservices in directories, you can define a prefix such as /your-service
 ```
+
+To validate during development, run `sls validate` to check your blueprint's syntax and coverage. You can set this up as a [pre-commit hook](https://github.com/typicode/husky) to prevent invalid blueprints being committed and deployed.
+
+Before a deployment package is built, the validation is run and will stop a deployment if the API blueprint is not at 100% coverage.
